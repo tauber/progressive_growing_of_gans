@@ -10,7 +10,8 @@ import inspect
 import numpy as np
 
 import tfutil
-import networks
+#import networks2
+
 
 #----------------------------------------------------------------------------
 # Custom unpickler that is able to load network pickles produced by
@@ -88,7 +89,7 @@ def patch_theano_gan(state):
     return {
         'version':          2,
         'name':             func,
-        'build_module_src': inspect.getsource(networks),
+        'build_module_src': inspect.getsource(networks2),
         'build_func_name':  theano_gan_remap[func],
         'static_kwargs':    spec,
         'variables':        vars}

@@ -12,7 +12,11 @@ import importlib
 import imp
 import numpy as np
 from collections import OrderedDict
-import tensorflow as tf
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+
+# for compat with v1 of tensorflow
+tf.compat.v1.disable_eager_execution()
 
 #----------------------------------------------------------------------------
 # Convenience.
@@ -24,7 +28,8 @@ def is_tf_expression(x):
     return isinstance(x, tf.Tensor) or isinstance(x, tf.Variable) or isinstance(x, tf.Operation)
 
 def shape_to_list(shape):
-    return [dim.value for dim in shape]
+#    return [dim.value for dim in shape]
+    return [dim if dim != None else 0 for dim in shape]
 
 def flatten(x):
     with tf.name_scope('Flatten'):
@@ -558,12 +563,17 @@ class Network:
         assert state['version'] == 2
         self.name = state['name']
         self.static_kwargs = state['static_kwargs']
-        self._build_module_src = state['build_module_src']
+#        self._build_module_src = state['build_module_src']
         self._build_func_name = state['build_func_name']
         
         # Parse imported module.
         module = imp.new_module('_tfutil_network_import_module_%d' % len(_network_import_modules))
-        exec(self._build_module_src, module.__dict__)
+        
+        with open(r'D:\Zohar\Neural Networks\progressive_growing_of_gans\networks.py', "r") as f:
+            self._build_module_src = f.read()
+
+#        exec(self._build_module_src, module.__dict__)
+        exec(compile(self._build_module_src, r'D:\Zohar\Neural Networks\progressive_growing_of_gans\networks.py', "exec"), module.__dict__)
         self._build_func = find_obj_in_module(module, self._build_func_name)
         _network_import_modules.append(module) # avoid gc
         
@@ -623,11 +633,16 @@ class Network:
         print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
         minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
         num_gpus        = 1,        # Number of GPUs to use.
+        is_gpu          = False,    # Whether using GPU or CPU
         out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
         out_add         = 0.0,      # Additive constant to apply to the output(s).
         out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
         out_dtype       = None,     # Convert the output to the specified data type.
         **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        processor_type = '/cpu:'
+        if(is_gpu):
+            processor_type = '/gpu:'
 
         assert len(in_arrays) == self.num_inputs
         num_items = in_arrays[0].shape[0]
@@ -641,7 +656,7 @@ class Network:
                 in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
                 out_split = []
                 for gpu in range(num_gpus):
-                    with tf.device('/gpu:%d' % gpu):
+                    with tf.device('%s%d' % (processor_type, gpu)):
                         out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
                         if out_mul != 1.0:
                             out_expr = [x * out_mul for x in out_expr]

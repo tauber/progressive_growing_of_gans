@@ -6,7 +6,11 @@
 # Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.get_variable = tf.compat.v1.get_variable
+
+use_cpu = True
 
 # NOTE: Do not import any application-specific modules here!
 
@@ -33,8 +37,10 @@ def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
 
 def dense(x, fmaps, gain=np.sqrt(2), use_wscale=False):
     if len(x.shape) > 2:
-        x = tf.reshape(x, [-1, np.prod([d.value for d in x.shape[1:]])])
-    w = get_weight([x.shape[1].value, fmaps], gain=gain, use_wscale=use_wscale)
+#        x = tf.reshape(x, [-1, np.prod([d.value for d in x.shape[1:]])])
+        x = tf.reshape(x, [-1, np.prod([d for d in x.shape[1:]])])
+    w = get_weight([x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
+#    w = get_weight([x.shape[1].value, fmaps], gain=gain, use_wscale=use_wscale)
     w = tf.cast(w, x.dtype)
     return tf.matmul(x, w)
 
@@ -43,9 +49,18 @@ def dense(x, fmaps, gain=np.sqrt(2), use_wscale=False):
 
 def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
     assert kernel >= 1 and kernel % 2 == 1
-    w = get_weight([kernel, kernel, x.shape[1].value, fmaps], gain=gain, use_wscale=use_wscale)
+#    w = get_weight([kernel, kernel, x.shape[1].value, fmaps], gain=gain, use_wscale=use_wscale)
+    w = get_weight([kernel, kernel, x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
     w = tf.cast(w, x.dtype)
-    return tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
+
+    if use_cpu:
+        conv2d_out = tf.nn.conv2d(tf.transpose(x, [0, 2, 3, 1]), w,
+#                                  tf.transpose(w, [0, 2, 3, 1]),
+                                  strides=[1,1,1,1], padding='SAME', data_format='NHWC')
+        conv2d_out = tf.transpose(conv2d_out, [0, 3, 1, 2])
+    else:
+        conv2d_out = tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
+    return conv2d_out
 
 #----------------------------------------------------------------------------
 # Apply bias to the given activation tensor.
